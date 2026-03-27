@@ -41,11 +41,13 @@ func main() {
 			fmt.Print("Sending a pause message\n")
 			err = pubsub.PublishJSON(chan1, routing.ExchangePerilDirect, routing.PauseKey, routing.PlayingState{IsPaused: true})
 			handleErr(err)
+			continue
 		}
 		if input[0] == "resume" {
 			fmt.Print("Sending a resume message\n")
 			err = pubsub.PublishJSON(chan1, routing.ExchangePerilDirect, routing.PauseKey, routing.PlayingState{IsPaused: false})
 			handleErr(err)
+			continue
 		}
 		if input[0] == "quit" {
 			fmt.Print("Exiting...\n")

@@ -32,10 +32,14 @@ func DeclareAndBind(
 	if err != nil {
 		return nil, amqp.Queue{}, fmt.Errorf("Error creating channel in DeclareAndBind: %s", err)
 	}
-	queue, err := ch.QueueDeclare(queueName, isDurable, !isDurable, !isDurable, false, nil)
+
+	table := amqp.Table{}
+	table["x-dead-letter-exchange"] = "peril_dlx"
+	queue, err := ch.QueueDeclare(queueName, isDurable, !isDurable, !isDurable, false, table)
 	if err != nil {
 		return nil, amqp.Queue{}, fmt.Errorf("Error creating queue in DeclareAndBind: %s", err)
 	}
+
 	err = ch.QueueBind(queueName, key, exchange, false, nil)
 	if err != nil {
 		return nil, amqp.Queue{}, fmt.Errorf("Error binding queue to exchange in DeclareAndBind: %s", err)
