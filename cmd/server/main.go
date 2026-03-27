@@ -27,6 +27,9 @@ func main() {
 	//err = pubsub.PublishJSON(chan1, routing.ExchangePerilDirect, routing.PauseKey, routing.PlayingState{IsPaused: true})
 	//handleErr(err)
 
+	_, _, err = pubsub.DeclareAndBind(con, routing.ExchangePerilTopic, routing.GameLogSlug, "game_logs.*", true)
+	handleErr(err)
+
 	gamelogic.PrintServerHelp()
 
 	for true {
@@ -41,7 +44,7 @@ func main() {
 		}
 		if input[0] == "resume" {
 			fmt.Print("Sending a resume message\n")
-			err = pubsub.PublishJSON(chan1, routing.ExchangePerilDirect, routing.PauseKey, routing.PlayingState{IsPaused: true})
+			err = pubsub.PublishJSON(chan1, routing.ExchangePerilDirect, routing.PauseKey, routing.PlayingState{IsPaused: false})
 			handleErr(err)
 		}
 		if input[0] == "quit" {
