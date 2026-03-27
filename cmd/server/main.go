@@ -3,12 +3,12 @@ package main
 import (
 	"fmt"
 
-	"os"
-	"os/signal"
-
+	"github.com/johannesalke/learn-pub-sub/internal/gamelogic"
 	"github.com/johannesalke/learn-pub-sub/internal/pubsub"
 	"github.com/johannesalke/learn-pub-sub/internal/routing"
 	amqp "github.com/rabbitmq/amqp091-go"
+	"os"
+	//"os/signal"
 )
 
 const connectionString = "amqp://guest:guest@localhost:5672/"
@@ -24,19 +24,44 @@ func main() {
 
 	chan1, err := con.Channel()
 	handleErr(err)
-	err = pubsub.PublishJSON(chan1, routing.ExchangePerilDirect, routing.PauseKey, routing.PlayingState{IsPaused: true})
-	handleErr(err)
+	//err = pubsub.PublishJSON(chan1, routing.ExchangePerilDirect, routing.PauseKey, routing.PlayingState{IsPaused: true})
+	//handleErr(err)
+
+	gamelogic.PrintServerHelp()
+
+	for true {
+		input := gamelogic.GetInput()
+		if len(input) == 0 {
+			continue
+		}
+		if input[0] == "pause" {
+			fmt.Print("Sending a pause message\n")
+			err = pubsub.PublishJSON(chan1, routing.ExchangePerilDirect, routing.PauseKey, routing.PlayingState{IsPaused: true})
+			handleErr(err)
+		}
+		if input[0] == "resume" {
+			fmt.Print("Sending a resume message\n")
+			err = pubsub.PublishJSON(chan1, routing.ExchangePerilDirect, routing.PauseKey, routing.PlayingState{IsPaused: true})
+			handleErr(err)
+		}
+		if input[0] == "quit" {
+			fmt.Print("Exiting...\n")
+			break
+		}
+		fmt.Print("Unknown command\n")
+	}
 
 	//wait for ctrl+c?
-	signalChan := make(chan os.Signal, 1)
+	/*signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Interrupt)
 	<-signalChan
 	fmt.Println("RabbitMQ connection closed.")
-
+	*/
 }
 
 func handleErr(err error) {
 	if err != nil {
 		fmt.Printf("Error: %s", err)
+		os.Exit(1)
 	}
 }
