@@ -22,6 +22,8 @@ func main() {
 	}
 	defer con.Close()
 	fmt.Print("You are now con-nec-ted.\n")
+	publishCh, err := con.Channel()
+	handleErr(err)
 
 	username, err := gamelogic.ClientWelcome()
 	handleErr(err)
@@ -38,14 +40,17 @@ func main() {
 	)
 	handleErr(err)
 
-	move_key := routing.ArmyMovesPrefix + "." + username
+	move_key := routing.ArmyMovesPrefix + "." + gamestate.GetUsername()
 	err = pubsub.SubscribeJSON( //|Subscribe Move
 		con, routing.ExchangePerilTopic, move_key,
-		"army_moves.*", false, handlerMove(gamestate),
+		"army_moves.*", false, handlerMove(gamestate, publishCh),
 	)
 	handleErr(err)
 
-	publishCh, err := con.Channel()
+	err = pubsub.SubscribeJSON( //Checks war messages across players
+		con, routing.ExchangePerilTopic, routing.WarRecognitionsPrefix,
+		routing.WarRecognitionsPrefix+".*", true, handlerWar(gamestate),
+	)
 	handleErr(err)
 
 	for true {
@@ -110,30 +115,68 @@ func handleErr(err error) {
 }
 
 func handlerPause(gs *gamelogic.GameState) func(routing.PlayingState) pubsub.AckType {
-	defer fmt.Print("\n> ")
+
 	return func(ps routing.PlayingState) pubsub.AckType {
+		defer fmt.Print("\n> ")
 		gs.HandlePause(ps)
 		return pubsub.AckRecieved
 	}
 
 }
 
-func handlerMove(gs *gamelogic.GameState) func(gamelogic.ArmyMove) pubsub.AckType {
-	defer fmt.Print("\n> ")
-	return func(mv gamelogic.ArmyMove) pubsub.AckType {
-		outcome := gs.HandleMove(mv)
+func handlerMove(gs *gamelogic.GameState, ch *amqp.Channel) func(gamelogic.ArmyMove) pubsub.AckType {
+
+	return func(move gamelogic.ArmyMove) pubsub.AckType {
+		defer fmt.Print("\n> ")
+		outcome := gs.HandleMove(move)
 		switch outcome {
 		case gamelogic.MoveOutComeSafe:
 			return pubsub.AckRecieved
-		case gamelogic.MoveOutcomeMakeWar:
-			return pubsub.AckRecieved
 		case gamelogic.MoveOutcomeSamePlayer:
-			return pubsub.NackDiscard
+			return pubsub.AckRecieved
+
+		case gamelogic.MoveOutcomeMakeWar:
+
+			err := pubsub.PublishJSON(
+				ch, routing.ExchangePerilTopic, routing.WarRecognitionsPrefix+"."+move.Player.Username, //gs.GetUsername(),
+				gamelogic.RecognitionOfWar{Attacker: move.Player, Defender: gs.GetPlayerSnap()},
+			)
+			if err != nil {
+				fmt.Printf("error:%s\n", err)
+				return pubsub.NackRequeue
+			}
+			return pubsub.AckRecieved
+
 		default:
 			return pubsub.NackDiscard
 
 		}
 
+	}
+
+}
+
+func handlerWar(gs *gamelogic.GameState) func(gamelogic.RecognitionOfWar) pubsub.AckType {
+
+	return func(row gamelogic.RecognitionOfWar) pubsub.AckType {
+		defer fmt.Print("> ")
+
+		outcome, _, _ := gs.HandleWar(row)
+		switch outcome {
+		case gamelogic.WarOutcomeNotInvolved:
+			return pubsub.NackRequeue
+		case gamelogic.WarOutcomeNoUnits:
+			return pubsub.NackDiscard
+		case gamelogic.WarOutcomeOpponentWon:
+			return pubsub.AckRecieved
+		case gamelogic.WarOutcomeYouWon:
+			return pubsub.AckRecieved
+		case gamelogic.WarOutcomeDraw:
+			return pubsub.AckRecieved
+		default:
+			fmt.Print("Error: War handler could not parse outcome.")
+			return pubsub.NackDiscard
+		}
 	}
 
 }

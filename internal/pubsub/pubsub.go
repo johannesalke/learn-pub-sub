@@ -33,9 +33,9 @@ func DeclareAndBind(
 		return nil, amqp.Queue{}, fmt.Errorf("Error creating channel in DeclareAndBind: %s", err)
 	}
 
-	table := amqp.Table{}
-	table["x-dead-letter-exchange"] = "peril_dlx"
-	queue, err := ch.QueueDeclare(queueName, isDurable, !isDurable, !isDurable, false, table)
+	//table := amqp.Table{"x-dead-letter-exchange": "peril_dlx"}
+	//table["x-dead-letter-exchange"] = "peril_dlx"
+	queue, err := ch.QueueDeclare(queueName, isDurable, !isDurable, !isDurable, false, amqp.Table{"x-dead-letter-exchange": "peril_dlx"})
 	if err != nil {
 		return nil, amqp.Queue{}, fmt.Errorf("Error creating queue in DeclareAndBind: %s", err)
 	}
@@ -85,20 +85,24 @@ func handleDeliveries[T any](deliveryCh <-chan amqp.Delivery, handler func(T) Ac
 		err := json.Unmarshal(delivery.Body, &message)
 		if err != nil {
 			fmt.Printf("Error unmarshalling delivery json: %s", err)
-			return
+
 		}
 		switch handler(message) {
 		case AckRecieved:
 			delivery.Ack(false)
-			fmt.Print("Delivery Action: Ack")
+			fmt.Print("Delivery Action: Ack\n")
+			continue
 		case NackRequeue:
 			delivery.Nack(false, true)
-			fmt.Print("Delivery Action: NackReque")
+			fmt.Print("Delivery Action: NackReque\n")
+			continue
 		case NackDiscard:
 			delivery.Nack(false, false)
-			fmt.Print("Delivery Action: NackDiscard")
+			fmt.Print("Delivery Action: NackDiscard\n")
+			continue
+		default:
+			delivery.Ack(false)
 		}
 
-		delivery.Ack(false)
 	}
 }
