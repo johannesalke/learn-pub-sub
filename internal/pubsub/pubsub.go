@@ -71,6 +71,7 @@ func SubscribeJSON[T any](
 	if err != nil {
 		return fmt.Errorf("Error durcing DeclareAndBind in SubscribeJSON:%s", err)
 	}
+	ch.Qos(10, 0, false)
 	derliveryCh, err := ch.Consume(queueName, "", false, false, false, false, nil)
 	if err != nil {
 		return fmt.Errorf("Error durcing ch.Consume in SubscribeJSON:%s", err)
@@ -147,6 +148,7 @@ func SubscribeGob[T any](
 	if err != nil {
 		return fmt.Errorf("Error durcing DeclareAndBind in SubscribeGob:%s", err)
 	}
+	ch.Qos(10, 0, false)
 	derliveryCh, err := ch.Consume(queueName, "", false, false, false, false, nil)
 	if err != nil {
 		return fmt.Errorf("Error durcing ch.Consume in SubscribeJSON:%s", err)

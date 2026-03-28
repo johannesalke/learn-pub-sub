@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/johannesalke/learn-pub-sub/internal/gamelogic"
@@ -96,8 +97,20 @@ func main() {
 			continue
 		}
 		if input[0] == "spam" {
-			fmt.Print("Spamming not allowed yet!\n")
+			if len(input) == 1 {
+				fmt.Print("This command requires 1 more argument: A number!\n")
+			}
+			nSpam, err := strconv.Atoi(input[1])
+			if err != nil {
+				fmt.Print("This command requires a number argument\n")
+			}
+			for i := 0; i < nSpam; i++ {
+				malLog := gamelogic.GetMaliciousLog()
+				publishGamelog(publishCh, malLog, gamestate.GetUsername())
+
+			}
 			continue
+
 		}
 		if input[0] == "quit" {
 			gamelogic.PrintQuit()
