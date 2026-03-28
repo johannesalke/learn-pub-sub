@@ -85,11 +85,23 @@ func SubscribeJSON[T any](
 func handleDeliveries[T any](deliveryCh <-chan amqp.Delivery, handler func(T) AckType) {
 	for delivery := range deliveryCh {
 		var message T
-		err := json.Unmarshal(delivery.Body, &message)
-		if err != nil {
-			fmt.Printf("Error unmarshalling delivery json: %s", err)
+		if delivery.ContentType == "application/json" {
+			err := json.Unmarshal(delivery.Body, &message)
+			if err != nil {
+				fmt.Printf("Error unmarshalling delivery json: %s", err)
+
+			}
+		} else if delivery.ContentType == "application/gob" {
+			buf := bytes.NewBuffer(delivery.Body)
+
+			decoder := gob.NewDecoder(buf)
+			err := decoder.Decode(&message)
+			if err != nil {
+				fmt.Printf("Error unmarshalling delivery gob: %s", err)
+			}
 
 		}
+
 		switch handler(message) {
 		case AckRecieved:
 			delivery.Ack(false)
@@ -120,5 +132,25 @@ func PublishGob[T any](ch *amqp.Channel, exchange, key string, val T) error {
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+func SubscribeGob[T any](
+	conn *amqp.Connection,
+	exchange,
+	queueName,
+	key string,
+	isDurable bool,
+	handler func(T) AckType,
+) error {
+	ch, _, err := DeclareAndBind(conn, exchange, queueName, key, isDurable)
+	if err != nil {
+		return fmt.Errorf("Error durcing DeclareAndBind in SubscribeGob:%s", err)
+	}
+	derliveryCh, err := ch.Consume(queueName, "", false, false, false, false, nil)
+	if err != nil {
+		return fmt.Errorf("Error durcing ch.Consume in SubscribeJSON:%s", err)
+	}
+	go handleDeliveries(derliveryCh, handler)
 	return nil
 }

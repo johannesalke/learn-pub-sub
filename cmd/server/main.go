@@ -30,6 +30,8 @@ func main() {
 	_, _, err = pubsub.DeclareAndBind(con, routing.ExchangePerilTopic, routing.GameLogSlug, "game_logs.*", true)
 	handleErr(err)
 
+	err = pubsub.SubscribeGob(con, routing.ExchangePerilTopic, "game_logs", routing.GameLogSlug+".*", true, handlerLogs)
+
 	gamelogic.PrintServerHelp()
 
 	for true {
@@ -70,3 +72,25 @@ func handleErr(err error) {
 		os.Exit(1)
 	}
 }
+
+func handlerLogs(log routing.GameLog) pubsub.AckType {
+	defer fmt.Print("\n> ")
+	err := gamelogic.WriteLog(log)
+	if err != nil {
+		return pubsub.NackDiscard
+	}
+	return pubsub.AckRecieved
+}
+
+/*func handlerLogs() func(gamelog routing.GameLog) pubsub.AckType {
+	return func(gamelog routing.GameLog) pubsub.AckType {
+		defer fmt.Print("> ")
+
+		err := gamelogic.WriteLog(gamelog)
+		if err != nil {
+			fmt.Printf("error writing log: %v\n", err)
+			return pubsub.NackRequeue
+		}
+		return pubsub.AckRecieved
+	}
+}*/
