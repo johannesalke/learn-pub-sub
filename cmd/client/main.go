@@ -2,11 +2,14 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"time"
+
 	"github.com/johannesalke/learn-pub-sub/internal/gamelogic"
 	"github.com/johannesalke/learn-pub-sub/internal/pubsub"
 	"github.com/johannesalke/learn-pub-sub/internal/routing"
 	amqp "github.com/rabbitmq/amqp091-go"
-	"os"
+
 	//"os/signal"
 	//"slices"
 	"strings"
@@ -49,7 +52,7 @@ func main() {
 
 	err = pubsub.SubscribeJSON( //Checks war messages across players
 		con, routing.ExchangePerilTopic, routing.WarRecognitionsPrefix,
-		routing.WarRecognitionsPrefix+".*", true, handlerWar(gamestate),
+		routing.WarRecognitionsPrefix+".*", true, handlerWar(gamestate, publishCh),
 	)
 	handleErr(err)
 
@@ -156,27 +159,57 @@ func handlerMove(gs *gamelogic.GameState, ch *amqp.Channel) func(gamelogic.ArmyM
 
 }
 
-func handlerWar(gs *gamelogic.GameState) func(gamelogic.RecognitionOfWar) pubsub.AckType {
+func handlerWar(gs *gamelogic.GameState, ch *amqp.Channel) func(gamelogic.RecognitionOfWar) pubsub.AckType {
 
 	return func(row gamelogic.RecognitionOfWar) pubsub.AckType {
 		defer fmt.Print("> ")
-
-		outcome, _, _ := gs.HandleWar(row)
+		var message string
+		outcome, winner, loser := gs.HandleWar(row)
 		switch outcome {
 		case gamelogic.WarOutcomeNotInvolved:
 			return pubsub.NackRequeue
 		case gamelogic.WarOutcomeNoUnits:
 			return pubsub.NackDiscard
 		case gamelogic.WarOutcomeOpponentWon:
+			message = fmt.Sprintf("%s won a war against %s", winner, loser)
+
 			return pubsub.AckRecieved
 		case gamelogic.WarOutcomeYouWon:
+			message = fmt.Sprintf("%s won a war against %s", winner, loser)
+			err := publishGamelog(ch, message, gs.GetUsername())
+			if err != nil {
+				fmt.Printf("Error: %s", err)
+				return pubsub.NackRequeue
+			}
 			return pubsub.AckRecieved
 		case gamelogic.WarOutcomeDraw:
+			message = fmt.Sprintf("A war between %s and %s resulted in a draw", winner, loser)
+			err := publishGamelog(ch, message, gs.GetUsername())
+			if err != nil {
+				fmt.Printf("Error: %s", err)
+				return pubsub.NackRequeue
+			}
 			return pubsub.AckRecieved
 		default:
 			fmt.Print("Error: War handler could not parse outcome.")
+			err := publishGamelog(ch, message, gs.GetUsername())
+			if err != nil {
+				fmt.Printf("Error: %s", err)
+				return pubsub.NackRequeue
+			}
 			return pubsub.NackDiscard
 		}
 	}
+
+}
+
+func publishGamelog(ch *amqp.Channel, message string, username string) error {
+	gamelog := routing.GameLog{CurrentTime: time.Now(), Message: message, Username: username}
+
+	err := pubsub.PublishGob(ch, routing.ExchangePerilTopic, routing.GameLogSlug+"."+username, gamelog)
+	if err != nil {
+		return err
+	}
+	return nil
 
 }
